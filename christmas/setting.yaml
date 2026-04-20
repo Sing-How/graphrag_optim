@@ -1,0 +1,94 @@
+encoding_model: cl100k_base
+
+models:
+  default_chat_model:
+    type: openai_chat
+    model_provider: openai
+    auth_type: api_key
+    api_key: ${GRAPHRAG_API_KEY}
+    model: gpt-4o-mini
+    model_supports_json: true
+    max_retries: 3
+
+  default_embedding_model:
+    type: openai_embedding
+    model_provider: openai
+    auth_type: api_key
+    api_key: ${GRAPHRAG_API_KEY}
+    model: text-embedding-3-small
+    max_retries: 3
+
+input:
+  storage:
+    type: file
+    base_dir: "./input"
+  file_type: text
+
+chunks:
+  size: 300
+  overlap: 100
+  group_by_columns: [id]
+
+output:
+  type: file
+  base_dir: "./output"
+
+cache:
+  type: file
+  base_dir: "./cache"
+
+reporting:
+  type: file
+  base_dir: "./reports"
+
+vector_store:
+  default_vector_store:
+    type: lancedb
+    db_uri: "./lancedb"
+    container_name: default
+
+embed_text:
+  model_id: default_embedding_model
+  vector_store_id: default_vector_store
+
+extract_graph:
+  model_id: default_chat_model
+  prompt: "prompts/extract_graph.txt"
+  entity_types: [organization, person, geo, event]
+  max_gleanings: 1
+
+summarize_descriptions:
+  model_id: default_chat_model
+  prompt: "prompts/summarize_descriptions.txt"
+  max_length: 500
+
+community_reports:
+  model_id: default_chat_model
+  graph_prompt: "prompts/community_report_graph.txt"
+  text_prompt: "prompts/community_report_text.txt"
+  max_length: 1000
+  max_input_length: 4000
+
+local_search:
+  chat_model_id: default_chat_model
+  embedding_model_id: default_embedding_model
+  prompt: "prompts/local_search_system_prompt.txt"
+
+  text_unit_prop: 0.5
+  community_prop: 0.1
+  conversation_history_max_turns: 5
+  top_k_entities: 10
+  top_k_relationships: 10
+  max_context_tokens: 12000
+
+  enable_subgraph_pruning: true
+  pruning_strategy: "multi_level"
+  relevance_scoring_method: "embedding"
+  embedding_model_for_scoring: "sentence-transformers/all-MiniLM-L6-v2"
+  high_relevance_threshold: 0.7
+  medium_relevance_threshold: 0.5
+  pruning_token_buffer_ratio: 0.9
+  max_hops_for_graph_pruning: 2
+  graph_pruning_importance_weight: 0.5
+  graph_pruning_distance_weight: 0.6
+  hybrid_min_reduction_rate: 0.2

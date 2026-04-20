@@ -1,0 +1,121 @@
+# GraphRAG 子图预裁剪优化方案 - 额外依赖
+# 用于毕业设计：Token优化方案二
+# 安装命令：uv pip install -r requirements_subgraph_pruning.txt
+
+# ============================================
+# 核心依赖
+# ============================================
+
+# Sentence Transformers - 用于关联性评分
+# 提供轻量级的文本嵌入模型
+sentence-transformers>=2.2.0,<3.0.0
+
+# Transformers - Sentence Transformers的底层依赖
+# 通常会被sentence-transformers自动安装，但明确列出以确保版本兼容
+transformers>=4.30.0,<5.0.0
+
+# PyTorch - Sentence Transformers的后端
+# 根据您的系统选择合适的版本
+# CPU版本（轻量级，适合开发和测试）
+torch>=2.0.0,<3.0.0
+
+# 如果有GPU，可以使用以下命令安装GPU版本：
+# uv pip install torch>=2.0.0 --index-url https://download.pytorch.org/whl/cu118
+
+# ============================================
+# 已有依赖（确认版本）
+# ============================================
+
+# NetworkX - 图算法库（PageRank, Betweenness等）
+# GraphRAG已包含，但确保版本 >= 3.0
+networkx>=3.4.2
+
+# NumPy - 数值计算
+# GraphRAG已包含
+numpy>=1.25.2
+
+# Pandas - 数据处理
+# GraphRAG已包含
+pandas>=2.2.3
+
+# ============================================
+# 可选依赖（用于加速）
+# ============================================
+
+# SciPy - 科学计算库，加速某些图算法
+scipy>=1.10.0
+
+# scikit-learn - 机器学习库，提供额外的相似度计算方法
+scikit-learn>=1.3.0
+
+# ============================================
+# 开发和测试依赖
+# ============================================
+
+# ROUGE - 用于答案质量评估
+rouge-score>=0.1.2
+
+# pytest - 单元测试
+pytest>=8.0.0
+
+# pytest-asyncio - 异步测试支持
+pytest-asyncio>=0.23.0
+
+# ============================================
+# 版本说明
+# ============================================
+
+# 1. sentence-transformers 2.2.0+
+#    - 支持最新的预训练模型
+#    - 包含性能优化
+#    - 兼容transformers 4.30+
+
+# 2. torch 2.0.0+
+#    - 更好的性能
+#    - 支持最新的模型架构
+#    - CPU版本约800MB，GPU版本约2GB
+
+# 3. networkx 3.4.2+
+#    - GraphRAG已包含此版本
+#    - 提供高效的图算法实现
+
+# ============================================
+# 最小化安装（仅核心功能）
+# ============================================
+
+# 如果只需要核心功能，可以只安装：
+# sentence-transformers>=2.2.0
+
+# 这会自动安装以下依赖：
+# - transformers
+# - torch
+# - torchvision
+# - numpy
+# - scikit-learn
+# - scipy
+# - nltk
+# - sentencepiece
+# - huggingface-hub
+
+# ============================================
+# 模型下载说明
+# ============================================
+
+# 首次运行时，sentence-transformers会自动下载模型
+# 默认模型：sentence-transformers/all-MiniLM-L6-v2
+# 模型大小：约90MB
+# 下载位置：~/.cache/huggingface/hub/
+
+# 如果需要预下载模型：
+# python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
+
+# ============================================
+# 国内镜像加速（可选）
+# ============================================
+
+# 如果下载速度慢，可以设置HuggingFace镜像：
+# export HF_ENDPOINT=https://hf-mirror.com
+
+# 或在代码中设置：
+# import os
+# os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'

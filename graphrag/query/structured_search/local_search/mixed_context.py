@@ -31,6 +31,9 @@ from graphrag.query.context_builder.local_context import (
     build_relationship_context,
     get_candidate_context,
 )
+from graphrag.query.context_builder.pruning_context_builder import (
+    apply_subgraph_pruning,
+)
 from graphrag.query.context_builder.source_context import (
     build_text_unit_context,
     count_relationships,
@@ -111,7 +114,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
         min_community_rank: int = 0,
         community_context_name: str = "Reports",
         column_delimiter: str = "|",
-        **kwargs: dict[str, Any],
+        **kwargs: Any,
     ) -> ContextBuilderResult:
         """
         Build data context for local search prompt.
@@ -147,6 +150,46 @@ class LocalSearchMixedContext(LocalContextBuilder):
             k=top_k_mapped_entities,
             oversample_scaler=2,
         )
+        active_relationships = list(self.relationships.values())
+        pruning_result = None
+
+        if kwargs.get("enable_subgraph_pruning", False) and selected_entities:
+            logger.info("Applying subgraph pruning to reduce token consumption")
+            (
+                pruned_entities,
+                pruned_relationships,
+                pruning_result,
+            ) = apply_subgraph_pruning(
+                query=query,
+                selected_entities=selected_entities,
+                relationships=active_relationships,
+                max_context_tokens=max_context_tokens,
+                tokenizer=self.tokenizer,
+                enable_pruning=True,
+                pruning_strategy=kwargs.get("pruning_strategy", "multi_level"),
+                relevance_scoring_method=kwargs.get(
+                    "relevance_scoring_method", "embedding"
+                ),
+                embedding_model=kwargs.get(
+                    "embedding_model_for_scoring",
+                    "sentence-transformers/all-MiniLM-L6-v2",
+                ),
+                high_relevance_threshold=kwargs.get("high_relevance_threshold", 0.7),
+                medium_relevance_threshold=kwargs.get(
+                    "medium_relevance_threshold", 0.5
+                ),
+                max_hops=kwargs.get("max_hops_for_graph_pruning", 2),
+                importance_weight=kwargs.get("graph_pruning_importance_weight", 0.5),
+                distance_weight=kwargs.get("graph_pruning_distance_weight", 0.6),
+                min_hybrid_reduction_rate=kwargs.get(
+                    "hybrid_min_reduction_rate", 0.2
+                ),
+                token_buffer_ratio=kwargs.get("pruning_token_buffer_ratio", 0.9),
+                column_delimiter=column_delimiter,
+            )
+            if pruning_result is not None:
+                selected_entities = pruned_entities
+                active_relationships = pruned_relationships
 
         # build context
         final_context = list[str]()
@@ -196,6 +239,8 @@ class LocalSearchMixedContext(LocalContextBuilder):
             include_entity_rank=include_entity_rank,
             rank_description=rank_description,
             include_relationship_weight=include_relationship_weight,
+            relationships=active_relationships,
+            pruning_result=pruning_result,
             top_k_relationships=top_k_relationships,
             relationship_ranking_attribute=relationship_ranking_attribute,
             return_candidate_context=return_candidate_context,
@@ -208,6 +253,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
         text_unit_tokens = max(int(max_context_tokens * text_unit_prop), 0)
         text_unit_context, text_unit_context_data = self._build_text_unit_context(
             selected_entities=selected_entities,
+            relationships=active_relationships,
             max_context_tokens=text_unit_tokens,
             return_candidate_context=return_candidate_context,
         )
@@ -256,11 +302,12 @@ class LocalSearchMixedContext(LocalContextBuilder):
                 community.attributes = {}
             community.attributes["matches"] = community_matches[community.community_id]
         selected_communities.sort(
-            key=lambda x: (x.attributes["matches"], x.rank),  # type: ignore
-            reverse=True,  # type: ignore
+            key=lambda x: ((x.attributes or {}).get("matches", 0), x.rank or 0),
+            reverse=True,
         )
         for community in selected_communities:
-            del community.attributes["matches"]  # type: ignore
+            if community.attributes and "matches" in community.attributes:
+                del community.attributes["matches"]
 
         context_text, context_data = build_community_context(
             community_reports=selected_communities,
@@ -306,6 +353,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
     def _build_text_unit_context(
         self,
         selected_entities: list[Entity],
+        relationships: list[Relationship] | None = None,
         max_context_tokens: int = 8000,
         return_candidate_context: bool = False,
         column_delimiter: str = "|",
@@ -318,7 +366,9 @@ class LocalSearchMixedContext(LocalContextBuilder):
         text_unit_ids_set = set()
 
         unit_info_list = []
-        relationship_values = list(self.relationships.values())
+        relationship_values = (
+            list(self.relationships.values()) if relationships is None else relationships
+        )
 
         for index, entity in enumerate(selected_entities):
             # get matching relationships
@@ -377,6 +427,8 @@ class LocalSearchMixedContext(LocalContextBuilder):
     def _build_local_context(
         self,
         selected_entities: list[Entity],
+        relationships: list[Relationship] | None = None,
+        pruning_result: Any | None = None,
         max_context_tokens: int = 8000,
         include_entity_rank: bool = False,
         rank_description: str = "relationship count",
@@ -387,6 +439,10 @@ class LocalSearchMixedContext(LocalContextBuilder):
         column_delimiter: str = "|",
     ) -> tuple[str, dict[str, pd.DataFrame]]:
         """Build data context for local search prompt combining entity/relationship/covariate tables."""
+        active_relationships = (
+            list(self.relationships.values()) if relationships is None else relationships
+        )
+
         # build entity context
         entity_context, entity_context_data = build_entity_context(
             selected_entities=selected_entities,
@@ -416,7 +472,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
                 relationship_context_data,
             ) = build_relationship_context(
                 selected_entities=added_entities,
-                relationships=list(self.relationships.values()),
+                relationships=active_relationships,
                 tokenizer=self.tokenizer,
                 max_context_tokens=max_context_tokens,
                 column_delimiter=column_delimiter,
@@ -457,6 +513,21 @@ class LocalSearchMixedContext(LocalContextBuilder):
         # attach entity context to final context
         final_context_text = entity_context + "\n\n" + "\n\n".join(final_context)
         final_context_data["entities"] = entity_context_data
+        if pruning_result:
+            pruning_summary = {
+                "strategy": pruning_result.pruning_strategy,
+                "original_entity_count": pruning_result.original_entity_count,
+                "pruned_entity_count": len(pruning_result.pruned_entities),
+                "original_relationship_count": pruning_result.original_relationship_count,
+                "pruned_relationship_count": len(pruning_result.pruned_relationships),
+                "tokens_before": pruning_result.tokens_before,
+                "tokens_after": pruning_result.tokens_after,
+                "tokens_saved": pruning_result.tokens_saved,
+                "token_reduction_rate": pruning_result.token_reduction_rate,
+            }
+            if pruning_result.metadata:
+                pruning_summary.update(pruning_result.metadata)
+            final_context_data["subgraph_pruning"] = pd.DataFrame([pruning_summary])
 
         if return_candidate_context:
             # we return all the candidate entities/relationships/covariates (not only those that were fitted into the context window)
@@ -464,7 +535,7 @@ class LocalSearchMixedContext(LocalContextBuilder):
             candidate_context_data = get_candidate_context(
                 selected_entities=selected_entities,
                 entities=list(self.entities.values()),
-                relationships=list(self.relationships.values()),
+                relationships=active_relationships,
                 covariates=self.covariates,
                 include_entity_rank=include_entity_rank,
                 entity_rank_description=rank_description,

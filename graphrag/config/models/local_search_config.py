@@ -47,3 +47,49 @@ class LocalSearchConfig(BaseModel):
         description="The maximum tokens.",
         default=graphrag_config_defaults.local_search.max_context_tokens,
     )
+
+    # 子图裁剪配置
+    enable_subgraph_pruning: bool = Field(
+        description="Enable subgraph pruning to reduce token consumption.",
+        default=False,
+    )
+    pruning_strategy: str = Field(
+        description="Pruning strategy: 'multi_level', 'graph_aware', or 'hybrid'.",
+        default="multi_level",
+    )
+    relevance_scoring_method: str = Field(
+        description="Relevance scoring method: 'embedding', 'hybrid', or 'simple'.",
+        default="embedding",
+    )
+    embedding_model_for_scoring: str = Field(
+        description="HuggingFace embedding model for relevance scoring.",
+        default="sentence-transformers/all-MiniLM-L6-v2",
+    )
+    high_relevance_threshold: float = Field(
+        description="High relevance threshold for multi-level pruning.",
+        default=0.7,
+    )
+    medium_relevance_threshold: float = Field(
+        description="Medium relevance threshold for multi-level pruning.",
+        default=0.5,
+    )
+    max_hops_for_graph_pruning: int = Field(
+        description="Maximum hops from query entities for graph-aware pruning.",
+        default=2,
+    )
+    graph_pruning_importance_weight: float = Field(
+        description="Importance weight for PageRank vs betweenness in graph-aware pruning.",
+        default=0.5,
+    )
+    graph_pruning_distance_weight: float = Field(
+        description="Distance weight vs graph importance in graph-aware pruning.",
+        default=0.6,
+    )
+    hybrid_min_reduction_rate: float = Field(
+        description="Minimum reduction rate before hybrid strategy triggers the graph-aware stage.",
+        default=0.2,
+    )
+    pruning_token_buffer_ratio: float = Field(
+        description="Token buffer ratio for pruning (0.0-1.0).",
+        default=0.9,
+    )

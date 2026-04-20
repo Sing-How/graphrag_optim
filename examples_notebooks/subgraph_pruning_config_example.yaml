@@ -1,0 +1,149 @@
+# GraphRAG 子图预裁剪配置示例
+# 用于毕业设计：Token优化方案二
+
+# ============================================
+# 基础配置（保持不变）
+# ============================================
+encoding_model: cl100k_base
+
+models:
+  default_chat_model:
+    api_key: ${GRAPHRAG_API_KEY}
+    type: openai_chat
+    model_provider: openai
+    model: gpt-4o-mini
+    max_tokens: 4000
+    temperature: 0.0
+  default_embedding_model:
+    api_key: ${GRAPHRAG_API_KEY}
+    type: openai_embedding
+    model_provider: openai
+    model: text-embedding-3-small
+
+# ============================================
+# 子图裁剪配置（新增）
+# ============================================
+local_search:
+  # 基础参数
+  chat_model_id: default_chat_model
+  embedding_model_id: default_embedding_model
+  text_unit_prop: 0.5
+  community_prop: 0.1
+  conversation_history_max_turns: 5
+  top_k_entities: 10
+  top_k_relationships: 10
+  max_context_tokens: 12000
+  
+  # ========================================
+  # 子图裁剪开关（用于消融实验）
+  # ========================================
+  enable_subgraph_pruning: true  # 设为false可关闭裁剪功能
+  
+  # ========================================
+  # 裁剪策略选择
+  # ========================================
+  # 可选值：
+  #   - "multi_level": 多层级裁剪（基于相关性分层）
+  #   - "graph_aware": 图结构感知裁剪（基于拓扑结构）
+  #   - "hybrid": 混合策略（两阶段裁剪）
+  pruning_strategy: "multi_level"
+  
+  # ========================================
+  # 关联性评分配置
+  # ========================================
+  # 评分方法：
+  #   - "embedding": 基于Sentence Transformer的语义相似度
+  #   - "hybrid": 结合embedding、文本匹配和实体重要性
+  #   - "simple": 简单的文本匹配（后备方案）
+  relevance_scoring_method: "embedding"
+  
+  # Embedding模型选择（HuggingFace模型）
+  # 推荐轻量级模型以减少延迟：
+  #   - sentence-transformers/all-MiniLM-L6-v2 (384维, 快速)
+  #   - sentence-transformers/all-mpnet-base-v2 (768维, 精确)
+  #   - sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 (多语言)
+  embedding_model_for_scoring: "sentence-transformers/all-MiniLM-L6-v2"
+  
+  # ========================================
+  # 多层级裁剪参数
+  # ========================================
+  # 高相关性阈值（>= 此值的实体/关系优先保留）
+  high_relevance_threshold: 0.7
+  
+  # 中等相关性阈值（>= 此值且 < high_threshold的元素在空间允许时保留）
+  medium_relevance_threshold: 0.5
+  
+  # Token预算使用比例（保留一定缓冲空间）
+  pruning_token_buffer_ratio: 0.9
+  
+  # ========================================
+  # 图结构感知裁剪参数
+  # ========================================
+  # 从查询实体出发的最大跳数
+  max_hops_for_graph_pruning: 2
+  
+  # 节点重要性权重（PageRank vs Betweenness Centrality）
+  # 范围：0.0-1.0，越大越依赖PageRank
+  graph_pruning_importance_weight: 0.5
+  
+  # 距离与重要性的权衡
+  # 范围：0.0-1.0，越大越重视距离
+  graph_pruning_distance_weight: 0.6
+
+  # 混合策略触发第二阶段图裁剪的最小Token减少率
+  hybrid_min_reduction_rate: 0.2
+
+# ============================================
+# 全局搜索配置（可选）
+# ============================================
+global_search:
+  max_context_tokens: 12000
+  data_max_tokens: 12000
+  map_max_length: 1000
+  reduce_max_length: 2000
+  concurrency: 32
+
+# ============================================
+# 索引构建配置
+# ============================================
+chunks:
+  size: 300
+  overlap: 100
+  group_by_columns: [id]
+
+extract_graph:
+  model_id: default_chat_model
+  prompt: "prompts/extract_graph.txt"
+  entity_types: [organization, person, geo, event]
+  max_gleanings: 1
+
+# ============================================
+# 消融实验配置示例
+# ============================================
+
+# 实验1：Baseline（不使用裁剪）
+# enable_subgraph_pruning: false
+
+# 实验2：仅使用多层级裁剪
+# enable_subgraph_pruning: true
+# pruning_strategy: "multi_level"
+# relevance_scoring_method: "embedding"
+
+# 实验3：仅使用图结构裁剪
+# enable_subgraph_pruning: true
+# pruning_strategy: "graph_aware"
+# max_hops_for_graph_pruning: 2
+
+# 实验4：混合策略
+# enable_subgraph_pruning: true
+# pruning_strategy: "hybrid"
+
+# 实验5：不同阈值对比
+# high_relevance_threshold: 0.6  # 宽松
+# high_relevance_threshold: 0.7  # 默认
+# high_relevance_threshold: 0.8  # 严格
+
+# 实验6：不同评分方法对比
+# relevance_scoring_method: "embedding"  # 纯语义
+# relevance_scoring_method: "hybrid"     # 混合
+# relevance_scoring_method: "simple"     # 文本匹配

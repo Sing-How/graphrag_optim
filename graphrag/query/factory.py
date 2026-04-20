@@ -102,6 +102,17 @@ def get_local_search_engine(
             "return_candidate_context": False,
             "embedding_vectorstore_key": EntityVectorStoreKey.ID,  # set this to EntityVectorStoreKey.TITLE if the vectorstore uses entity title as ids
             "max_context_tokens": ls_config.max_context_tokens,  # change this based on the token limit you have on your model (if you are using a model with 8k limit, a good setting could be 5000)
+            "enable_subgraph_pruning": ls_config.enable_subgraph_pruning,
+            "pruning_strategy": ls_config.pruning_strategy,
+            "relevance_scoring_method": ls_config.relevance_scoring_method,
+            "embedding_model_for_scoring": ls_config.embedding_model_for_scoring,
+            "high_relevance_threshold": ls_config.high_relevance_threshold,
+            "medium_relevance_threshold": ls_config.medium_relevance_threshold,
+            "max_hops_for_graph_pruning": ls_config.max_hops_for_graph_pruning,
+            "graph_pruning_importance_weight": ls_config.graph_pruning_importance_weight,
+            "graph_pruning_distance_weight": ls_config.graph_pruning_distance_weight,
+            "hybrid_min_reduction_rate": ls_config.hybrid_min_reduction_rate,
+            "pruning_token_buffer_ratio": ls_config.pruning_token_buffer_ratio,
         },
         response_type=response_type,
         callbacks=callbacks,
